@@ -1,3 +1,14 @@
+availableSecrets:
+  secretManager:
+  - versionName: projects/942335066163/secrets/DEFECTDOJO_URL/versions/latest
+    env: DEFECTDOJO_URL
+
+  - versionName: projects/942335066163/secrets/DEFECTDOJO_TOKEN/versions/latest
+    env: DEFECTDOJO_TOKEN
+
+  - versionName: projects/942335066163/secrets/DEFECTDOJO_ENGAGEMENT_ID/versions/latest
+    env: DEFECTDOJO_ENGAGEMENT_ID
+
 steps:
 
 # Step 1 — Run Semgrep Scan
@@ -25,11 +36,11 @@ steps:
     - |
       apt update && apt install -y jq
 
-      HIGH_COUNT=$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep-results.json)
+      HIGH_COUNT=$$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep-results.json)
 
-      echo "High severity findings: $HIGH_COUNT"
+      echo "High severity findings: $$HIGH_COUNT"
 
-      if [ "$HIGH_COUNT" -gt 0 ]; then
+      if [ "$$HIGH_COUNT" -gt 0 ]; then
         echo "Blocking build due to security vulnerabilities"
         exit 1
       fi
@@ -38,14 +49,18 @@ steps:
 - name: curlimages/curl
   id: upload-defectdojo
   entrypoint: sh
+  secretEnv:
+    - DEFECTDOJO_URL
+    - DEFECTDOJO_TOKEN
+    - DEFECTDOJO_ENGAGEMENT_ID
   args:
     - -c
     - |
-      curl -X POST "${_DEFECTDOJO_URL}/api/v2/import-scan/" \
-        -H "Authorization: Token ${_DEFECTDOJO_TOKEN}" \
+      curl -X POST "$$DEFECTDOJO_URL/api/v2/import-scan/" \
+        -H "Authorization: Token $$DEFECTDOJO_TOKEN" \
         -F "scan_type=Semgrep JSON Report" \
         -F "file=@semgrep-results.json" \
-        -F "engagement=${_DEFECTDOJO_ENGAGEMENT_ID}" \
+        -F "engagement=$$DEFECTDOJO_ENGAGEMENT_ID" \
         -F "verified=true" \
         -F "active=true"
 
@@ -54,11 +69,11 @@ steps:
   args:
     - build
     - "-t"
-    - "us-central1-docker.pkg.dev/$PROJECT_ID/security-pipeline/app"
+    - "us-central1-docker.pkg.dev/gabeo-poc/security-pipeline-poc/app"
     - "."
 
 images:
-- "us-central1-docker.pkg.dev/$PROJECT_ID/security-pipeline/app"
+- "us-central1-docker.pkg.dev/gabeo-poc/security-pipeline-poc/app"
 
 options:
   logging: CLOUD_LOGGING_ONLY
