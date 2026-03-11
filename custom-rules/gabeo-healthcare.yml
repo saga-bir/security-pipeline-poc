@@ -1,0 +1,16 @@
+rules:
+  - id: hardcoded-credentials
+    pattern-either:
+      - pattern: password = "..."
+      - pattern: api_key = "..."
+      - pattern: secret = "..."
+    message: Hardcoded credentials detected
+    severity: ERROR
+    languages: [python]
+
+  - id: sql-injection-risk
+    pattern-either:
+      - pattern: execute("... " + $VAR + "...")
+    message: Potential SQL injection vulnerability
+    severity: ERROR
+    languages: [python]

@@ -1,0 +1,61 @@
+steps:
+
+# Step 1 — Run Semgrep Scan
+- name: returntocorp/semgrep
+  id: semgrep-scan
+  entrypoint: sh
+  args:
+    - -c
+    - |
+      semgrep \
+        --config=p/security-audit \
+        --config=p/python \
+        --config=p/flask \
+        --config=p/sql-injection \
+        --config=custom-rules/ \
+        --json \
+        --output=semgrep-results.json
+
+# Step 2 — Check Severity
+- name: ubuntu
+  id: check-vulnerabilities
+  entrypoint: bash
+  args:
+    - -c
+    - |
+      apt update && apt install -y jq
+
+      HIGH_COUNT=$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep-results.json)
+
+      echo "High severity findings: $HIGH_COUNT"
+
+      if [ "$HIGH_COUNT" -gt 0 ]; then
+        echo "Blocking build due to security vulnerabilities"
+        exit 1
+      fi
+
+# Step 3 — Upload Results to DefectDojo
+- name: curlimages/curl
+  id: upload-defectdojo
+  entrypoint: sh
+  args:
+    - -c
+    - |
+      curl -X POST "${_DEFECTDOJO_URL}/api/v2/import-scan/" \
+        -H "Authorization: Token ${_DEFECTDOJO_TOKEN}" \
+        -F "scan_type=Semgrep JSON Report" \
+        -F "file=@semgrep-results.json" \
+        -F "engagement=${_DEFECTDOJO_ENGAGEMENT_ID}" \
+        -F "verified=true" \
+        -F "active=true"
+
+# Step 4 — Build Docker Image
+- name: gcr.io/cloud-builders/docker
+  args:
+    - build
+    - "-t"
+    - "us-central1-docker.pkg.dev/$PROJECT_ID/security-pipeline/app"
+    - "."
+
+images:
+- "us-central1-docker.pkg.dev/$PROJECT_ID/security-pipeline/app"
