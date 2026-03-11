@@ -27,7 +27,26 @@ steps:
         --json \
         --output=semgrep-results.json
 
-# Step 2 — Check Severity
+# Step 2 — Upload Results to DefectDojo
+- name: curlimages/curl
+  id: upload-defectdojo
+  entrypoint: sh
+  secretEnv:
+    - DEFECTDOJO_URL
+    - DEFECTDOJO_TOKEN
+    - DEFECTDOJO_ENGAGEMENT_ID
+  args:
+    - -c
+    - |
+      curl -X POST "$$DEFECTDOJO_URL/api/v2/import-scan/" \
+        -H "Authorization: Token $$DEFECTDOJO_TOKEN" \
+        -F "scan_type=Semgrep JSON Report" \
+        -F "file=@semgrep-results.json" \
+        -F "engagement=$$DEFECTDOJO_ENGAGEMENT_ID" \
+        -F "verified=true" \
+        -F "active=true"
+
+# Step 3 — Check Severity
 - name: ubuntu
   id: check-vulnerabilities
   entrypoint: bash
@@ -46,23 +65,23 @@ steps:
       fi
 
 # Step 3 — Upload Results to DefectDojo
-- name: curlimages/curl
-  id: upload-defectdojo
-  entrypoint: sh
-  secretEnv:
-    - DEFECTDOJO_URL
-    - DEFECTDOJO_TOKEN
-    - DEFECTDOJO_ENGAGEMENT_ID
-  args:
-    - -c
-    - |
-      curl -X POST "$$DEFECTDOJO_URL/api/v2/import-scan/" \
-        -H "Authorization: Token $$DEFECTDOJO_TOKEN" \
-        -F "scan_type=Semgrep JSON Report" \
-        -F "file=@semgrep-results.json" \
-        -F "engagement=$$DEFECTDOJO_ENGAGEMENT_ID" \
-        -F "verified=true" \
-        -F "active=true"
+# - name: curlimages/curl
+#   id: upload-defectdojo
+#   entrypoint: sh
+#   secretEnv:
+#     - DEFECTDOJO_URL
+#     - DEFECTDOJO_TOKEN
+#     - DEFECTDOJO_ENGAGEMENT_ID
+#   args:
+#     - -c
+#     - |
+#       curl -X POST "$$DEFECTDOJO_URL/api/v2/import-scan/" \
+#         -H "Authorization: Token $$DEFECTDOJO_TOKEN" \
+#         -F "scan_type=Semgrep JSON Report" \
+#         -F "file=@semgrep-results.json" \
+#         -F "engagement=$$DEFECTDOJO_ENGAGEMENT_ID" \
+#         -F "verified=true" \
+#         -F "active=true"
 
 # Step 4 — Build Docker Image
 - name: gcr.io/cloud-builders/docker
