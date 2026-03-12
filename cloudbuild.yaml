@@ -21,6 +21,46 @@ steps:
         --json \
         --output=semgrep-results.json
 
+# Step 1.5 — Convert JSON Report to HTML
+- name: ubuntu
+  id: generate-html-report
+  entrypoint: bash
+  args:
+    - -c
+    - |
+      apt update && apt install -y jq
+
+      echo "<html><head>
+      <title>Semgrep Security Report</title>
+      <style>
+      body {font-family: Arial; margin:40px;}
+      table {border-collapse: collapse; width:100%;}
+      th,td {border:1px solid #ccc; padding:8px;}
+      th {background:#f4f4f4;}
+      .ERROR {color:red; font-weight:bold;}
+      .WARNING {color:orange;}
+      </style>
+      </head><body>" > semgrep-report.html
+
+      echo "<h2>Semgrep Security Scan Report</h2>" >> semgrep-report.html
+      echo "<h3>Repository: $REPO_NAME</h3>" >> semgrep-report.html
+      echo "<h3>Commit: $COMMIT_SHA</h3>" >> semgrep-report.html
+      echo "<h3>Branch: $BRANCH_NAME</h3>" >> semgrep-report.html
+      echo "<h3>Build ID: $BUILD_ID</h3>" >> semgrep-report.html
+      echo "<table>" >> semgrep-report.html
+      echo "<tr><th>Severity</th><th>Rule</th><th>File</th><th>Line</th><th>Description</th></tr>" >> semgrep-report.html
+
+      jq -r '.results[] |
+      "<tr>
+      <td class=\"\(.extra.severity)\">\(.extra.severity)</td>
+      <td>\(.check_id)</td>
+      <td>\(.path)</td>
+      <td>\(.start.line)</td>
+      <td>\(.extra.message)</td>
+      </tr>"' semgrep-results.json >> semgrep-report.html
+
+      echo "</table></body></html>" >> semgrep-report.html
+
 
 # Step 2 — Upload Report to GCS
 - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -30,6 +70,7 @@ steps:
     - -c
     - |
       gsutil cp semgrep-results.json gs://semgrep-security-scan-reports/$BUILD_ID-semgrep.json
+      gsutil cp semgrep-report.html gs://semgrep-security-scan-reports/$BUILD_ID-semgrep.html
 
 
 # Step 3 — Count Vulnerabilities
@@ -59,7 +100,7 @@ steps:
     - |
       HIGH_COUNT=$$(cat vuln-count.txt)
 
-      MESSAGE="Semgrep Scan Result | Repo: $REPO_NAME | Commit: $COMMIT_SHA | High Issues: $$HIGH_COUNT | Report: https://storage.cloud.google.com/semgrep-security-scan-reports/$BUILD_ID-semgrep.json"
+      MESSAGE="Semgrep Scan Result | Repo: $REPO_NAME | Commit: $COMMIT_SHA | High Issues: $$HIGH_COUNT | Report: https://storage.cloud.google.com/semgrep-security-scan-reports/$BUILD_ID-semgrep.html"
 
       curl -X POST -H "Content-type: application/json" \
       --data "{\"text\":\"$$MESSAGE\"}" \
