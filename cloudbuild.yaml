@@ -39,11 +39,11 @@ steps:
     - |
       apt update && apt install -y jq
 
-      HIGH_COUNT=$(jq '[.results[]? | select(.extra.severity == "ERROR")] | length' semgrep-results.json)
+      HIGH_COUNT=$$(jq '[.results[]? | select(.extra.severity == "ERROR")] | length' semgrep-results.json)
 
-      echo "High severity findings: $HIGH_COUNT"
+      echo "High severity findings: $$HIGH_COUNT"
 
-      echo $HIGH_COUNT > vuln-count.txt
+      echo $$HIGH_COUNT > vuln-count.txt
 
 # Step 4 — Send Slack Alert
 - name: curlimages/curl
