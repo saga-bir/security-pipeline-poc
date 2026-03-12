@@ -1,13 +1,7 @@
 availableSecrets:
   secretManager:
-  - versionName: projects/942335066163/secrets/DEFECTDOJO_URL/versions/latest
-    env: DEFECTDOJO_URL
-
-  - versionName: projects/942335066163/secrets/DEFECTDOJO_TOKEN/versions/latest
-    env: DEFECTDOJO_TOKEN
-
-  - versionName: projects/942335066163/secrets/DEFECTDOJO_ENGAGEMENT_ID/versions/latest
-    env: DEFECTDOJO_ENGAGEMENT_ID
+  - versionName: projects/942335066163/secrets/SLACK_WEBHOOK_URL/versions/latest
+    env: SLACK_WEBHOOK_URL
 
 steps:
 
@@ -27,26 +21,16 @@ steps:
         --json \
         --output=semgrep-results.json
 
-# Step 2 — Upload Results to DefectDojo
-- name: curlimages/curl
-  id: upload-defectdojo
-  entrypoint: sh
-  secretEnv:
-    - DEFECTDOJO_URL
-    - DEFECTDOJO_TOKEN
-    - DEFECTDOJO_ENGAGEMENT_ID
+# Step 2 — Upload Report
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  id: upload-report
+  entrypoint: bash
   args:
     - -c
     - |
-      curl -X POST "$$DEFECTDOJO_URL/api/v2/import-scan/" \
-        -H "Authorization: Token $$DEFECTDOJO_TOKEN" \
-        -F "scan_type=Semgrep JSON Report" \
-        -F "file=@semgrep-results.json" \
-        -F "engagement=$$DEFECTDOJO_ENGAGEMENT_ID" \
-        -F "verified=true" \
-        -F "active=true"
+      gsutil cp semgrep-results.json gs://semgrep-security-scan-reports/$BUILD_ID-semgrep.json
 
-# Step 3 — Check Severity
+# Step 3 — Count Vulnerabilities
 - name: ubuntu
   id: check-vulnerabilities
   entrypoint: bash
@@ -55,35 +39,44 @@ steps:
     - |
       apt update && apt install -y jq
 
-      HIGH_COUNT=$$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep-results.json)
+      HIGH_COUNT=$(jq '[.results[]? | select(.extra.severity == "ERROR")] | length' semgrep-results.json)
 
-      echo "High severity findings: $$HIGH_COUNT"
+      echo "High severity findings: $HIGH_COUNT"
 
-      if [ "$$HIGH_COUNT" -gt 0 ]; then
-        echo "Blocking build due to security vulnerabilities"
+      echo $HIGH_COUNT > vuln-count.txt
+
+# Step 4 — Send Slack Alert
+- name: curlimages/curl
+  id: slack-alert
+  entrypoint: sh
+  secretEnv:
+    - SLACK_WEBHOOK_URL
+  args:
+    - -c
+    - |
+      HIGH_COUNT=$(cat vuln-count.txt)
+
+      MESSAGE="Semgrep Scan Result | Repo: $REPO_NAME | Commit: $COMMIT_SHA | High Issues: $HIGH_COUNT | Report: gs://semgrep-security-scan-reports/$BUILD_ID-semgrep.json"
+
+      curl -X POST -H 'Content-type: application/json' \
+      --data "{\"text\":\"$MESSAGE\"}" \
+      $SLACK_WEBHOOK_URL
+
+# Step 5 — Block Build If Needed
+- name: ubuntu
+  id: block-build
+  entrypoint: bash
+  args:
+    - -c
+    - |
+      HIGH_COUNT=$(cat vuln-count.txt)
+
+      if [ "$HIGH_COUNT" -gt 0 ]; then
+        echo "Blocking build due to vulnerabilities"
         exit 1
       fi
 
-# Step 3 — Upload Results to DefectDojo
-# - name: curlimages/curl
-#   id: upload-defectdojo
-#   entrypoint: sh
-#   secretEnv:
-#     - DEFECTDOJO_URL
-#     - DEFECTDOJO_TOKEN
-#     - DEFECTDOJO_ENGAGEMENT_ID
-#   args:
-#     - -c
-#     - |
-#       curl -X POST "$$DEFECTDOJO_URL/api/v2/import-scan/" \
-#         -H "Authorization: Token $$DEFECTDOJO_TOKEN" \
-#         -F "scan_type=Semgrep JSON Report" \
-#         -F "file=@semgrep-results.json" \
-#         -F "engagement=$$DEFECTDOJO_ENGAGEMENT_ID" \
-#         -F "verified=true" \
-#         -F "active=true"
-
-# Step 4 — Build Docker Image
+# Step 6 — Build Docker Image
 - name: gcr.io/cloud-builders/docker
   args:
     - build
