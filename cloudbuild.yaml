@@ -59,7 +59,7 @@ steps:
     - |
       HIGH_COUNT=$$(cat vuln-count.txt)
 
-      MESSAGE="Semgrep Scan Result | Repo: $REPO_NAME | Commit: $COMMIT_SHA | High Issues: $$HIGH_COUNT | Report: gs://semgrep-security-scan-reports/$BUILD_ID-semgrep.json"
+      MESSAGE="Semgrep Scan Result | Repo: $REPO_NAME | Commit: $COMMIT_SHA | High Issues: $$HIGH_COUNT | Report: https://storage.cloud.google.com/semgrep-security-scan-reports/$BUILD_ID-semgrep.json"
 
       curl -X POST -H "Content-type: application/json" \
       --data "{\"text\":\"$$MESSAGE\"}" \
