@@ -21,7 +21,8 @@ steps:
         --json \
         --output=semgrep-results.json
 
-# Step 2 — Upload Report
+
+# Step 2 — Upload Report to GCS
 - name: gcr.io/google.com/cloudsdktool/cloud-sdk
   id: upload-report
   entrypoint: bash
@@ -29,6 +30,7 @@ steps:
     - -c
     - |
       gsutil cp semgrep-results.json gs://semgrep-security-scan-reports/$BUILD_ID-semgrep.json
+
 
 # Step 3 — Count Vulnerabilities
 - name: ubuntu
@@ -45,6 +47,7 @@ steps:
 
       echo $$HIGH_COUNT > vuln-count.txt
 
+
 # Step 4 — Send Slack Alert
 - name: curlimages/curl
   id: slack-alert
@@ -54,13 +57,14 @@ steps:
   args:
     - -c
     - |
-      HIGH_COUNT=$(cat vuln-count.txt)
+      HIGH_COUNT=$$(cat vuln-count.txt)
 
-      MESSAGE="Semgrep Scan Result | Repo: $REPO_NAME | Commit: $COMMIT_SHA | High Issues: $HIGH_COUNT | Report: gs://semgrep-security-scan-reports/$BUILD_ID-semgrep.json"
+      MESSAGE="Semgrep Scan Result | Repo: $REPO_NAME | Commit: $COMMIT_SHA | High Issues: $$HIGH_COUNT | Report: gs://semgrep-security-scan-reports/$BUILD_ID-semgrep.json"
 
-      curl -X POST -H 'Content-type: application/json' \
-      --data "{\"text\":\"$MESSAGE\"}" \
-      $SLACK_WEBHOOK_URL
+      curl -X POST -H "Content-type: application/json" \
+      --data "{\"text\":\"$$MESSAGE\"}" \
+      $$SLACK_WEBHOOK_URL
+
 
 # Step 5 — Block Build If Needed
 - name: ubuntu
@@ -69,12 +73,13 @@ steps:
   args:
     - -c
     - |
-      HIGH_COUNT=$(cat vuln-count.txt)
+      HIGH_COUNT=$$(cat vuln-count.txt)
 
-      if [ "$HIGH_COUNT" -gt 0 ]; then
+      if [ "$$HIGH_COUNT" -gt 0 ]; then
         echo "Blocking build due to vulnerabilities"
         exit 1
       fi
+
 
 # Step 6 — Build Docker Image
 - name: gcr.io/cloud-builders/docker
@@ -83,6 +88,7 @@ steps:
     - "-t"
     - "us-central1-docker.pkg.dev/gabeo-poc/security-pipeline-poc/app"
     - "."
+
 
 images:
 - "us-central1-docker.pkg.dev/gabeo-poc/security-pipeline-poc/app"
